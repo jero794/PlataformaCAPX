@@ -1,4 +1,6 @@
 import streamlit as st
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 # Función para validar si todas las respuestas fueron contestadas
 def validar_respuestas(respuestas):
@@ -8,7 +10,7 @@ def validar_respuestas(respuestas):
     return True
 
 # Creación del formulario
-st.title("Formulario para Agencia de Marketing")
+st.title("Formulario para CAPX")
 
 # Preguntas del formulario
 respuestas = {
@@ -41,11 +43,71 @@ respuestas = {
     ),
 }
 
+# Base de datos de servicios
+servicios_db = {
+    "Creación de Contenido": 1000,
+    "Manejo de Redes Sociales": 1500,
+    "Campañas Publicitarias": 2000,
+    "Mail Marketing": 800,
+    "Investigación de Mercado": 1200,
+    "Plan de Mercadotecnia": 1800,
+    "Auditoría": 500,
+    "Página Web": 3000,
+}
+
+# Calcular el costo total basado en la selección
+def calcular_cotizacion(servicios_seleccionados):
+    total = 0
+    for servicio in servicios_seleccionados:
+        if servicio in servicios_db:
+            total += servicios_db[servicio]
+    return total
+
+# Autenticación y creación del servicio de Google Docs
+def crear_servicio_docs():
+    credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/documents'])
+    service = build('docs', 'v1', credentials=credentials)
+    return service
+
+# Función para crear el documento en Google Docs
+def enviar_a_google_docs(respuestas):
+    service = crear_servicio_docs()
+
+    # Crear el documento en Google Docs
+    document = {
+        'title': respuestas['Nombre de la empresa']
+    }
+    doc = service.documents().create(body=document).execute()
+    document_id = doc.get('documentId')
+
+    # Inicializa 'contenido' aquí
+    contenido = []  
+
+    # Estructura del documento
+    contenido.append({'insertText': {'location': {'index': 1}, 'text': respuestas['Nombre de la empresa'] + '\n\n'}})
+    contenido.append({'insertText': {'location': {'index': 1}, 'text': f"{respuestas['Giro de la empresa']} | {respuestas['Nuestro contacto']} | {respuestas['Puesto del contacto']}\n\n"}})
+
+    # Añadir preguntas y respuestas
+    for pregunta, respuesta in respuestas.items():
+        if pregunta not in ['Nombre de la empresa', 'Giro de la empresa', 'Nuestro contacto', 'Puesto del contacto']:
+            contenido.append({'insertText': {'location': {'index': 1}, 'text': f"{pregunta}: {respuesta}\n\n"}})
+
+    # Calcular cotización y agregar al documento
+    if '¿Servicios que buscan?' in respuestas:
+        servicios_seleccionados = respuestas['¿Servicios que buscan?']
+        total_cotizacion = calcular_cotizacion(servicios_seleccionados)
+        contenido.append({'insertText': {'location': {'index': 1}, 'text': f"Total cotización: ${total_cotizacion}\n\n"}})
+
+    # Actualiza el documento
+    service.documents().batchUpdate(documentId=document_id, body={'requests': contenido}).execute()
+
+    return document_id
+
 # Botón de registro
 if st.button("Registrar"):
     if validar_respuestas(respuestas):
-        # Llama a la función para enviar los datos a Google Docs
-        st.write("Formulario enviado correctamente.")
+        doc_id = enviar_a_google_docs(respuestas)
+        st.write("Formulario enviado correctamente. Documento creado en Google Docs.")
     else:
         st.warning("Por favor, contesta todas las preguntas.")
 
